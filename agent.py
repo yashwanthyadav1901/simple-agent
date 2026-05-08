@@ -3,7 +3,7 @@ import re
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# 1. SETUP: Initialize the Nvidia Client
+# SETUP: Initialize the Nvidia Client
 load_dotenv()
 
 client = OpenAI(
@@ -11,78 +11,91 @@ client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY")
 )
 
-# 2. THE TOOL: Our actual Python math function
+# --- 🛠️ IMPROVED TOOLS ---
+
 def calculate(expression):
     try:
-        # Note: eval() is used for simplicity here
-        return str(eval(expression))
+        # CLEANING: Remove commas and whitespace so eval() doesn't crash
+        clean_expr = expression.replace(",", "").strip()
+        return str(eval(clean_expr))
     except Exception as e:
-        return f"Error: {e}"
+        return f"Error: Could not calculate '{expression}'. Ensure you only use numbers and operators."
 
-# 3. THE SYSTEM PROMPT: The instructions for the 'Brain'
+def search_web(query):
+    # FLEXIBLE SEARCH: Check if keywords exist in our small database
+    query = query.lower()
+    database = {
+        "tokyo": "37,000,000",
+        "new york": "8,300,000",
+        "paris": "2,100,000"
+    }
+    for key in database:
+        if key in query:
+            return database[key]
+    return "Information not found. Try searching for just the city name."
+
+tool_box = {
+    "web_search": search_web,
+    "calculator": calculate
+}
+
+# --- 🧠 IMPROVED PROMPT ---
+
 SYSTEM_PROMPT = """
-You are an AI Agent that can use a calculator. 
-You follow a strict loop: Thought, Action, Action Input, Observation.
+You are a Research Assistant. You follow this EXACT pattern:
 
-If you need to do math, use the calculator tool.
-Tool Name: calculator
-Tool Input: A mathematical expression (e.g., "10 + 5 * 2")
+Thought: [Reasoning]
+Action: [tool_name]
+Action Input: [input_data]
 
-Format your response exactly like this:
-Thought: [Your reasoning about what to do]
-Action: calculator
-Action Input: [The math expression]
+Then you MUST STOP and wait for an Observation. 
+Available Tools: 'web_search' and 'calculator'.
 
-Wait for an Observation after you provide an Action.
-When you have the final result, respond with:
-Final Answer: [The final result]
+Example:
+Thought: I need the population of Tokyo.
+Action: web_search
+Action Input: Tokyo
+Observation: 37,000,000
+...and so on until:
+Final Answer: [The result]
 """
 
-def run_agent(user_prompt):
-    # This list acts as the agent's "Scratchpad" (Memory)
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_prompt}
-    ]
+def run_agent(question):
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": question}]
     
-    # THE LOOP: Max 5 attempts to prevent infinite loops
-    for i in range(5):
-        print(f"\n--- 🔄 Step {i+1} ---")
+    for i in range(10):
+        print(f"\n--- 🧠 Step {i+1} ---")
         
+        # We use a lower temperature to make the model less "creative" and more precise
         response = client.chat.completions.create(
-            model="meta/llama-3.1-8b-instruct", # Or any Nvidia model you prefer
+            model="meta/llama-3.1-8b-instruct",
             messages=messages,
-            stop=["Observation:"] # Tell the LLM to STOP after it asks for a tool
+            temperature=0.1, 
+            stop=["Observation:", "Observation"] # Force stop
         )
         
-        content = response.choices[0].message.content
+        content = response.choices[0].message.content.strip()
         print(content)
-        
-        # Check if the agent is finished
+
         if "Final Answer:" in content:
-            return content
+            return
 
-        # PARSING: Look for Action and Action Input
-        action_match = re.search(r"Action: (.+)", content)
-        input_match = re.search(r"Action Input: (.+)", content)
-
-        if action_match and input_match:
-            tool_name = action_match.group(1).strip()
-            tool_input = input_match.group(1).strip()
-
-            if tool_name == "calculator":
-                # EXECUTION: Run the Python code
-                result = calculate(tool_input)
-                observation = f"\nObservation: {result}"
-                print(observation)
+        # Improved Parsing Logic
+        try:
+            action = re.search(r"Action:\s*(.*)", content).group(1).strip()
+            action_input = re.search(r"Action Input:\s*(.*)", content).group(1).strip()
+            
+            if action in tool_box:
+                result = tool_box[action](action_input)
+                obs_text = f"Observation: {result}"
+                print(f"🛠️ {obs_text}")
                 
-                # FEEDBACK: Add the Thought + Action + Observation back to memory
+                # Append the agent's thought AND our observation to the history
                 messages.append({"role": "assistant", "content": content})
-                messages.append({"role": "user", "content": observation})
+                messages.append({"role": "user", "content": obs_text})
             else:
-                messages.append({"role": "user", "content": "Observation: Tool not found."})
-        else:
-            return "Error: Agent failed to follow the format."
+                messages.append({"role": "user", "content": f"Observation: Tool '{action}' not found."})
+        except:
+            messages.append({"role": "user", "content": "Observation: You forgot the Action/Action Input format. Please try again."})
 
-# 4. RUN THE TEST
-print(run_agent("What is 1234 multiplied by 56, and then add 789?"))
+run_agent("What is the population of Tokyo plus New York City?, give answer in millions")
