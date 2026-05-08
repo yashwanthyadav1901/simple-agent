@@ -1,22 +1,61 @@
-# Simple AI Agent
+# Simple AI Agent Examples
 
-An AI agent that performs mathematical calculations using an agentic loop pattern. The agent uses LLaMA 3.1 via the NVIDIA API to reason about math problems and execute calculations.
+A collection of AI agent implementations demonstrating agentic loops with reasoning and tool use. These examples use LLaMA 3.1 via the NVIDIA API to implement Thought-Action-Observation patterns.
+
+## Featured Agents
+
+### 1. Math Agent (`agent.py`)
+An AI agent that performs mathematical calculations using an agentic loop pattern.
+- **Tool**: Calculator for mathematical expressions
+- **Pattern**: Thought → Action → Observation → Answer
+- **Use Case**: Breaking down complex math problems and executing calculations
+
+### 2. Weather-Aware Trip Planner (`trip_planner.py`)
+An AI agent that plans day trips based on real-time weather conditions.
+- **Tool**: Weather checker for destination cities
+- **Pattern**: Check weather → Plan activities → Return structured itinerary
+- **Use Case**: Context-aware travel planning with conditional logic
+
+## Key Learnings
+
+### JSON Extraction Challenges
+When extracting JSON from LLM responses:
+- **Problem**: Using `content.find("{"):content.rfind("}")` can capture multiple JSON objects or extra text, causing `JSONDecodeError: Extra data`
+- **Solution**: Implement incremental parsing that tries to parse from the first `{` progressively until finding a valid JSON object
+- **Better Solution**: Use regex to find specific JSON blobs with required keys (e.g., `required_keys.issubset(result.keys())`)
+
+### System Prompt Design
+- **Be explicit**: LLMs need clear instructions about WHEN to output JSON and what format to use
+- **Use EXACT patterns**: Specify exact tool formats (Action/Action Input) to reduce parsing errors
+- **Stop tokens matter**: Use `stop=["Observation:"]` to prevent the model from hallucinating results
+- **Mock tools first**: Start with mock data to validate the loop before integrating real APIs
+
+### Agent Loop Patterns
+- **Iteration limits**: Always set `MAX_ITERATIONS` to prevent infinite loops
+- **Robust parsing**: Use try-except when extracting structured data from LLM output
+- **Tool validation**: Check if parsed action exists in `tool_box` before executing
+- **Clear feedback**: Print debug info at each iteration to understand agent behavior
+
+### Temperature & Determinism
+- Use `temperature=0.1` for tool-using agents (reduces creativity, improves consistency)
+- Use higher temperatures (0.7+) only when you want more varied reasoning
 
 ## Features
 
 - **Agentic Loop**: Implements a Thought-Action-Observation loop for reasoning
-- **Calculator Tool**: Execute mathematical expressions safely
-- **Multi-step Reasoning**: Capable of breaking down complex math problems
+- **Tool Execution**: Safely execute tools based on LLM decisions
+- **Multi-step Reasoning**: Break down complex problems across iterations
 - **Streaming Support**: Integrates with OpenAI-compatible APIs (NVIDIA, OpenAI, etc.)
+- **Debug Output**: Clear iteration-by-iteration logging
 
-## How It Works
+## How Agents Work
 
-The agent follows this pattern:
-1. **Thought**: Reasons about the problem
-2. **Action**: Decides to use the calculator tool
-3. **Action Input**: Specifies the mathematical expression
-4. **Observation**: Receives the calculation result
-5. **Final Answer**: Provides the final result
+### Basic Pattern
+1. **Thought**: Reason about the problem
+2. **Action**: Decide which tool to use
+3. **Action Input**: Specify tool parameters
+4. **Observation**: Receive tool result
+5. **Final Answer**: Provide structured response
 
 ## Prerequisites
 
@@ -43,11 +82,17 @@ OPENAI_API_KEY=your-api-key-here
 
 ## Usage
 
-Run the agent with a math problem:
-
+### Run the Math Agent
 ```bash
 python3 agent.py
 ```
+
+### Run the Trip Planner
+```bash
+python3 trip_planner.py
+```
+
+Both agents will print detailed iteration logs showing the reasoning process and tool calls.
 
 The default example asks: "What is 1234 multiplied by 56, and then add 789?"
 
